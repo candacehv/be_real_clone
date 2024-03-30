@@ -1,0 +1,481 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description" : "AWS CloudFormation Sample Template SNSToSQS: This Template creates an SNS topic that can send messages to 
+    two SQS queues with appropriate permissions for one IAM user to publish to the topic and another to read messages from the queues. 
+    MySNSTopic is set up to publish to two subscribed endpoints, which are two SQS queues (MyQueue1 and MyQueue2). MyPublishUser is an IAM user 
+    that can publish to MySNSTopic using the Publish API. MyTopicPolicy assigns that permission to MyPublishUser. MyQueueUser is an IAM user 
+    that can read messages from the two SQS queues. MyQueuePolicy assigns those permissions to MyQueueUser. It also assigns permission for 
+    MySNSTopic to publish its notifications to the two queues. The template creates access keys for the two IAM users with MyPublishUserKey 
+    and MyQueueUserKey. ***Warning*** you will be billed for the AWS resources used if you create a stack from this template.",
+    "Parameters": {
+      "PublishUserPassword": {
+        "NoEcho": "true",
+        "Type": "String",
+        "Description": "Password for the IAM user PublishUser",
+        "MinLength": "1",
+        "MaxLength": "41",
+        "AllowedPattern": "[a-zA-Z0-9]*",
+        "ConstraintDescription": "must contain only alphanumeric characters."
+      },
+      "QueueUserPassword": {
+        "NoEcho": "true",
+        "Type": "String",
+        "Description": "Password for the IAM user QueueUser",
+        "MinLength": "1",
+        "MaxLength": "41",
+        "AllowedPattern": "[a-zA-Z0-9]*",
+        "ConstraintDescription": "must contain only alphanumeric characters."
+      }
+    },
+    "Resources": {
+      "SNSNewPostTopic": {
+        "Type": "AWS::SNS::Topic",
+        "Properties": {
+          "Subscription": [{
+              "Endpoint": {
+                "Fn::GetAtt": ["PostTimelinessQueue", "Arn"]
+              },
+              "Protocol": "sqs"
+            },
+            {
+              "Endpoint": {
+                "Fn::GetAtt": ["ProcessPostMetadataQueue", "Arn"]
+              },
+              "Protocol": "sqs"
+            },
+            {
+                "Endpoint": {
+                  "Fn::GetAtt": ["PostStreaksQueue", "Arn"]
+                },
+                "Protocol": "sqs"
+              }
+          ]
+        }
+      },
+      "LambdaExecutionRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": [
+                    "lambda.amazonaws.com"
+                  ]
+                },
+                "Action": [
+                  "sts:AssumeRole"
+                ]
+              }
+            ]
+          },
+        },
+        "Policies": [
+        {
+            "PolicyName": "allowLambdaLogs",
+            "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                "Effect": "Allow",
+                "Action": [
+                    "logs:*"
+                ],
+                "Resource": "arn:aws:logs:*:*:*"
+                }
+            ]
+        }
+      }, 
+      {
+        "PolicyName": "allowSqs",
+        "PolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+            "Effect": "Allow",
+            "Action": [
+                "logs:*", 
+                "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
+                "sqs:GetQueueAttributes",
+                "sqs:ChangeMessageVisibility"
+            ],
+            "Resource": [{
+                    "Fn::GetAtt": ["PostTimelinessQueue", "Arn"]
+                  },
+                  {
+                    "Fn::GetAtt": ["ProcessPostMetadataQueue", "Arn"]
+                  },
+                  {
+                    "Fn::GetAtt": ["PostStreaksQueue", "Arn"]
+                  }
+                ]
+                }
+            ]
+            }
+        }, 
+        ], 
+      "PostTimelinessQueue": {
+        "Type": "AWS::SQS::Queue"
+      },
+      "ProcessPostMetadataQueue": {
+        "Type": "AWS::SQS::Queue"
+      },
+      "PostStreaksQueue": {
+        "Type": "AWS::SQS::Queue"
+      },
+      "PublishUser": {
+        "Type": "AWS::IAM::User",
+        "Properties": {
+          "LoginProfile": {
+            "Password": {
+              "Ref": "PublishUserPassword"
+            }
+          }
+        }
+      },
+      "MyPublishUserKey": {
+        "Type": "AWS::IAM::AccessKey",
+        "Properties": {
+          "UserName": {
+            "Ref": "PublishUser"
+          }
+        }
+      },
+      "PublishTopicGroup": {
+        "Type": "AWS::IAM::Group",
+        "Properties": {
+          "Policies": [{
+            "PolicyName": "TopicGroupPolicy",
+            "PolicyDocument": {
+              "Statement": [{
+                "Effect": "Allow",
+                "Action": [
+                  "sns:Publish"
+                ],
+                "Resource": {
+                  "Ref": "SNSNewPostTopic"
+                }
+              }]
+            }
+          }]
+        }
+      },
+      "AddUserToPublishTopicGroup": {
+        "Type": "AWS::IAM::UserToGroupAddition",
+        "Properties": {
+          "GroupName": {
+            "Ref": "PublishTopicGroup"
+          },
+          "Users": [{
+            "Ref": "PublishUser"
+          }]
+        }
+      },
+      "QueueUser": {
+        "Type": "AWS::IAM::User",
+        "Properties": {
+          "LoginProfile": {
+            "Password": {
+              "Ref": "QueueUserPassword"
+            }
+          }
+        }
+      },
+      "QueueUserKey": {
+        "Type": "AWS::IAM::AccessKey",
+        "Properties": {
+          "UserName": {
+            "Ref": "QueueUser"
+          }
+        }
+      },
+      "RDMessageQueueGroup": {
+        "Type": "AWS::IAM::Group",
+        "Properties": {
+          "Policies": [{
+            "PolicyName": "QueueGroupPolicy",
+            "PolicyDocument": {
+              "Statement": [{
+                "Effect": "Allow",
+                "Action": [
+                  "sqs:DeleteMessage",
+                  "sqs:ReceiveMessage"
+                ],
+                "Resource": [{
+                    "Fn::GetAtt": ["PostTimelinessQueue", "Arn"]
+                  },
+                  {
+                    "Fn::GetAtt": ["ProcessPostMetadataQueue", "Arn"]
+                  },
+                  {
+                    "Fn::GetAtt": ["PostStreaksQueue", "Arn"]
+                  }
+                ]
+              }]
+            }
+          }]
+        }
+      },
+      "AddUserToQueueGroup": {
+        "Type": "AWS::IAM::UserToGroupAddition",
+        "Properties": {
+          "GroupName": {
+            "Ref": "RDMessageQueueGroup"
+          },
+          "Users": [{
+            "Ref": "QueueUser"
+          }]
+        }
+      },
+      "QueuePolicy": {
+        "Type": "AWS::SQS::QueuePolicy",
+        "Properties": {
+          "PolicyDocument": {
+            "Statement": [{
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "sns.amazonaws.com"
+              },
+              "Action": ["sqs:SendMessage"],
+              "Resource": "*",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Ref": "SNSNewPostTopic"
+                  }
+                }
+              }
+            }]
+          },
+          "Queues": [{
+            "Ref": "PostTimelinessQueue"
+          }, {
+            "Ref": "ProcessPostMetadataQueue"
+          }, {
+            "Ref": "PostStreaksQueue"
+          }]
+        }
+      }
+    },
+    "timelinessLambdaFunction": 
+    { 
+        "Type": "AWS::Lambda::Function",
+        "Properties": 
+        {
+            "Code": 
+            {
+                "S3Bucket": "bereal",
+                "S3Key": "lambda/timelinessLambda.zip"
+            },
+            "Handler": "app.handler",
+            "Role": 
+            {
+                "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+            },
+            "Runtime": "python3.11",
+            "Timeout": 60,
+            "MemorySize": 512
+        }
+    }, 
+    "metadataLambdaFunction": 
+    { 
+        "Type": "AWS::Lambda::Function",
+        "Properties": 
+        {
+            "Code": 
+            {
+                "S3Bucket": "bereal",
+                "S3Key": "lambda/metadataLambda.zip"
+            },
+            "Handler": "app.handler",
+            "Role": 
+            {
+                "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+            },
+            "Runtime": "python3.11",
+            "Timeout": 60,
+            "MemorySize": 512
+        }
+    }, 
+    "streaksLambdaFunction": 
+    { 
+        "Type": "AWS::Lambda::Function",
+        "Properties": 
+        {
+            "Code": 
+            {
+                "S3Bucket": "bereal",
+                "S3Key": "lambda/streamsLambda.zip"
+            },
+            "Handler": "app.handler",
+            "Role": 
+            {
+                "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+            },
+            "Runtime": "python3.11",
+            "Timeout": 60,
+            "MemorySize": 512
+        }
+    }, 
+    "timelinessLambdaFunctionEventSourceMapping": {
+        "Type": "AWS::Lambda::EventSourceMapping",
+        "Properties": {
+        "BatchSize": 10, 
+        "Enabled": true,
+        "EventSourceArn": {
+            "Fn::GetAtt": [
+            "PostTimelinessQueue",
+            "Arn"
+            ]  
+            },
+            "FunctionName": {
+            "Fn::GetAtt": [
+                "timelinessLambdaFunction", 
+                "Arn"
+            ]
+        }
+        }
+    }, 
+    "metadataLambdaFunctionEventSourceMapping": {
+        "Type": "AWS::Lambda::EventSourceMapping",
+        "Properties": {
+        "BatchSize": 10, 
+        "Enabled": true,
+        "EventSourceArn": {
+            "Fn::GetAtt": [
+            "ProcessPostMetadataQueue",
+            "Arn"
+            ]  
+            },
+            "FunctionName": {
+            "Fn::GetAtt": [
+                "metadataLambdaFunction", 
+                "Arn"
+            ]
+        }
+        }
+    }, 
+    "streaksLambdaFunctionEventSourceMapping": {
+        "Type": "AWS::Lambda::EventSourceMapping",
+        "Properties": {
+        "BatchSize": 10, 
+        "Enabled": true,
+        "EventSourceArn": {
+            "Fn::GetAtt": [
+            "PostStreaksQueue",
+            "Arn"
+            ]  
+            },
+            "FunctionName": {
+            "Fn::GetAtt": [
+                "streaksLambdaFunction", 
+                "Arn"
+            ]
+        }
+        }
+    },
+    "Outputs": {
+      "SNSTopicTopicARN": {
+        "Value": {
+          "Ref": "SNSNewPostTopic"
+        }
+      },
+      "PostTimelinessQueueInfo": {
+        "Value": {
+          "Fn::Join": [
+            " ",
+            [
+              "ARN:",
+              {
+                "Fn::GetAtt": ["PostTimelinessQueue", "Arn"]
+              },
+              "URL:",
+              {
+                "Ref": "PostTimelinessQueue"
+              }
+            ]
+          ]
+        }
+      },
+      "ProcessPostMetadataQueueInfo": {
+        "Value": {
+          "Fn::Join": [
+            " ",
+            [
+              "ARN:",
+              {
+                "Fn::GetAtt": ["ProcessPostMetadataQueue", "Arn"]
+              },
+              "URL:",
+              {
+                "Ref": "ProcessPostMetadataQueue"
+              }
+            ]
+          ]
+        }
+      },
+      "PostStreaksQueueInfo": {
+        "Value": {
+          "Fn::Join": [
+            " ",
+            [
+              "ARN:",
+              {
+                "Fn::GetAtt": ["PostStreaksQueue", "Arn"]
+              },
+              "URL:",
+              {
+                "Ref": "PostStreaksQueue"
+              }
+            ]
+          ]
+        }
+      },
+      "PublishUserInfo": {
+        "Value": {
+          "Fn::Join": [
+            " ",
+            [
+              "ARN:",
+              {
+                "Fn::GetAtt": ["PublishUser", "Arn"]
+              },
+              "Access Key:",
+              {
+                "Ref": "PublishUserKey"
+              },
+              "Secret Key:",
+              {
+                "Fn::GetAtt": ["PublishUserKey", "SecretAccessKey"]
+              }
+            ]
+          ]
+        }
+      },
+      "QueueUserInfo": {
+        "Value": {
+          "Fn::Join": [
+            " ",
+            [
+              "ARN:",
+              {
+                "Fn::GetAtt": ["QueueUser", "Arn"]
+              },
+              "Access Key:",
+              {
+                "Ref": "QueueUserKey"
+              },
+              "Secret Key:",
+              {
+                "Fn::GetAtt": ["QueueUserKey", "SecretAccessKey"]
+              }
+            ]
+          ]
+        }
+      }
+    }
+  }
+}
