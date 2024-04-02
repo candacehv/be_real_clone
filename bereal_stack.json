@@ -1,0 +1,79 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This Template creates an SNS topic and the appropriate permissions policy, users, and groups to publish to the topic (PublishUser) and send messages to any queues in the account. TopicPolicy assigns that permission to PublishUser.  It also assigns permission for the SNS Topic to publish its notifications to the queue.",
+    "Parameters": {
+      "PublishUserPassword": {
+        "NoEcho": "true",
+        "Type": "String",
+        "Description": "Password for the IAM user PublishUser",
+        "MinLength": "1",
+        "MaxLength": "41",
+        "AllowedPattern": "[a-zA-Z0-9]*",
+        "ConstraintDescription": "must contain only alphanumeric characters."
+      }
+    },
+    "Resources": {
+      "SNSNewPostTopic": {
+        "Type": "AWS::SNS::Topic"
+      },
+      "PublishUser": {
+        "Type": "AWS::IAM::User",
+        "Properties": {
+          "LoginProfile": { "Password": { "Ref": "PublishUserPassword" } }
+        }
+      },
+      "PublishUserKey": {
+        "Type": "AWS::IAM::AccessKey",
+        "Properties": { "UserName": { "Ref": "PublishUser" } }
+      },
+      "PublishTopicGroup": {
+        "Type": "AWS::IAM::Group",
+        "Properties": {
+          "Policies": [
+            {
+              "PolicyName": "TopicGroupPolicy",
+              "PolicyDocument": {
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Action": ["sns:Publish"],
+                    "Resource": { "Ref": "SNSNewPostTopic" }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "AddUserToPublishTopicGroup": {
+        "Type": "AWS::IAM::UserToGroupAddition",
+        "Properties": {
+          "GroupName": { "Ref": "PublishTopicGroup" },
+          "Users": [{ "Ref": "PublishUser" }]
+        }
+      }
+    },
+
+    "Outputs": {
+      "SNSTopicARN": { "Value": { "Ref": "SNSNewPostTopic" } },
+      "PublishUserInfo": {
+        "Value": {
+          "Fn::Join": [
+            " ",
+            [
+              "ARN:",
+              { "Fn::GetAtt": ["PublishUser", "Arn"] },
+              "Access Key:",
+              { "Ref": "PublishUserKey" },
+              "Secret Key:",
+              { "Fn::GetAtt": ["PublishUserKey", "SecretAccessKey"] }
+            ]
+          ]
+        }
+      },
+      "LambdaExecutionRoleArn": {
+        "Value": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
+        "Export": { "Name": "LambdaExecutionRoleArn" }
+      }
+    }
+  }

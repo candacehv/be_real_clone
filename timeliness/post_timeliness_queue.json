@@ -14,82 +14,185 @@
    "Resources": {
       "PostTimelinessQueue": {
          "Properties": {
-            "QueueName": "PostTimelinessQueue"
+            "QueueName": "PostTimelinessQueue",
+            "VisibilityTimeout": 180
            },
          "Type": "AWS::SQS::Queue"
-         }, 
-      "PostTimelinessTopicSubscription": {
-         "Type": "AWS::SNS::Subscription",
-         "Properties": {
-            "Endpoint": {
-               "Fn::GetAtt": [
-                  "PostTimelinessQueue",
-                  "Arn"
-               ]
-            },
-            "Protocol": "sqs",
-            "TopicArn":"arn:aws:sns:us-east-1:851725573367:bereal-clone-1-SNSNewPostTopic-5nUF8RUBGDC1"
-         }
-      },
-      "QueueUser": {
-         "Type": "AWS::IAM::User",
-         "Properties": {
-           "LoginProfile": { "Password": { "Ref": "QueueUserPassword" } }
-         }
-       },
-       "QueueUserKey": {
-         "Type": "AWS::IAM::AccessKey",
-         "Properties": { "UserName": { "Ref": "QueueUser" } }
-       },
-       "RDMessageQueueGroup": {
-         "Type": "AWS::IAM::Group",
-         "Properties": {
-           "Policies": [
-             {
-               "PolicyName": "QueueGroupPolicy",
-               "PolicyDocument": {
-                 "Statement": [
-                   {
-                     "Effect": "Allow",
-                     "Action": ["sqs:DeleteMessage", "sqs:ReceiveMessage"],
-                     "Resource": [
-                       "*"
-                     ]
-                   }
-                 ]
-               }
-             }
-           ]
-         }
-       },
-       "AddUserToQueueGroup": {
-         "Type": "AWS::IAM::UserToGroupAddition",
-         "Properties": {
-           "GroupName": { "Ref": "RDMessageQueueGroup" },
-           "Users": [{ "Ref": "QueueUser" }]
-         }
-       },
-       "QueuePolicy": {
-         "Type": "AWS::SQS::QueuePolicy",
-         "Properties": {
-           "PolicyDocument": {
-             "Statement": [
-               {
-                 "Effect": "Allow",
-                 "Principal": { "Service": "sns.amazonaws.com" },
-                 "Action": ["sqs:SendMessage"],
-                 "Resource": ["*"],
-                 "Condition": {
-                   "ArnEquals": { "aws:SourceArn": "arn:aws:sns:us-east-1:851725573367:bereal-clone-1-SNSNewPostTopic-5nUF8RUBGDC1" }
-                 }
-               }
-             ]
-           },
-           "Queues":  [
-               { "Ref": "PostTimelinessQueue" }
+      }, 
+      "TimelinessLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+          "Code": { "S3Bucket": "bereal", "S3Key": "timeliness/app.zip" },
+          "Handler": "app.app",
+          "Role": { "Fn::GetAtt": ["TimelinessLambdaExecutionRole", "Arn"] },
+          "Runtime": "python3.11",
+          "Timeout": 60,
+          "MemorySize": 512
+      }
+    },
+    "TimelinessLambdaFunctionEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "BatchSize": 10,
+        "Enabled": true,
+        "EventSourceArn": {"Fn::GetAtt": ["PostTimelinessQueue", "Arn"]},
+        "FunctionName": { "Fn::GetAtt": ["TimelinessLambdaFunction", "Arn"] }
+      }
+    },
+    "TimelinessLambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "Service": ["lambda.amazonaws.com"] },
+              "Action": ["sts:AssumeRole"]
+            }
           ]
-         }
-       }
+        },
+        "Policies": [
+          {
+            "PolicyName": "allowLambdaLogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["logs:*"],
+                  "Resource": "arn:aws:logs:*:*:*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "allowSqs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:*",
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes",
+                    "sqs:ChangeMessageVisibility",
+                    "dynamodb:*"
+                  ],
+                  "Resource": [
+                    "*"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PostTimelinessTopicSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+          "Endpoint": {
+            "Fn::GetAtt": [
+                "PostTimelinessQueue",
+                "Arn"
+            ]
+          },
+          "Protocol": "sqs",
+          "TopicArn":"arn:aws:sns:us-east-1:851725573367:bereal-clone-1-SNSNewPostTopic-5nUF8RUBGDC1"
+      }
+    },
+    "PostTimelinessDatabase": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "user_id",
+            "AttributeType": "S"
+          }, 
+          {
+            "AttributeName": "released_timestamp", 
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "user_id",
+            "KeyType": "HASH"
+          }, 
+          {
+            "AttributeName": "released_timestamp", 
+            "KeyType": "RANGE"
+          }
+        ], 
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        },
+        "TableName": "post_timeliness"
+      }
+    },
+    "QueueUser": {
+        "Type": "AWS::IAM::User",
+        "Properties": {
+          "LoginProfile": { "Password": { "Ref": "QueueUserPassword" } }
+        }
+      },
+      "QueueUserKey": {
+        "Type": "AWS::IAM::AccessKey",
+        "Properties": { "UserName": { "Ref": "QueueUser" } }
+      },
+      "RDMessageQueueGroup": {
+        "Type": "AWS::IAM::Group",
+        "Properties": {
+          "Policies": [
+            {
+              "PolicyName": "QueueGroupPolicy",
+              "PolicyDocument": {
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Action": ["sqs:DeleteMessage", "sqs:ReceiveMessage"],
+                    "Resource": [
+                      "*"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "AddUserToQueueGroup": {
+        "Type": "AWS::IAM::UserToGroupAddition",
+        "Properties": {
+          "GroupName": { "Ref": "RDMessageQueueGroup" },
+          "Users": [{ "Ref": "QueueUser" }]
+        }
+      },
+      "QueuePolicy": {
+        "Type": "AWS::SQS::QueuePolicy",
+        "Properties": {
+          "PolicyDocument": {
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": { "Service": "sns.amazonaws.com" },
+                "Action": ["sqs:SendMessage"],
+                "Resource": ["*"],
+                "Condition": {
+                  "ArnEquals": { "aws:SourceArn": "arn:aws:sns:us-east-1:851725573367:bereal-clone-1-SNSNewPostTopic-5nUF8RUBGDC1" }
+                }
+              }
+            ]
+          },
+          "Queues":  [
+              { "Ref": "PostTimelinessQueue" }
+        ]
+      }
+    }
    },
    "Outputs": {
       "QueueUserInfo": {

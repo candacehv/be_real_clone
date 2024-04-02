@@ -22,17 +22,26 @@
       }
     },
     "Resources": {
-      "SNSNewPostTopic": {
-        "Type": "AWS::SNS::Topic",
+      "timelinessLambdaFunction": {
+        "Type": "AWS::Lambda::Function",
         "Properties": {
-          "Subscription": [
-            {
-              "Endpoint": "https://sqs.us-east-1.amazonaws.com/851725573367/PostTimelinessQueue",
-              "Protocol": "sqs"
-            }
-          ]
+            "Code": { "S3Bucket": "bereal", "S3Key": "timeliness/app.zip" },
+            "Handler": "app.app",
+            "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
+            "Runtime": "python3.11",
+            "Timeout": 60,
+            "MemorySize": 512
         }
-      },
+    },
+   "timelinessLambdaFunctionEventSourceMapping": {
+    "Type": "AWS::Lambda::EventSourceMapping",
+    "Properties": {
+      "BatchSize": 10,
+      "Enabled": true,
+      "EventSourceArn": {"Fn::GetAtt": ["PostTimelinessQueue", "Arn"]},
+      "FunctionName": { "Fn::GetAtt": ["timelinessLambdaFunction", "Arn"] }
+    }
+  },
       "LambdaExecutionRole": {
         "Type": "AWS::IAM::Role",
         "Properties": {
