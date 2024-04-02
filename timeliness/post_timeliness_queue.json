@@ -1,0 +1,138 @@
+{
+   "AWSTemplateFormatVersion": "2010-09-09",
+   "Parameters": {
+      "QueueUserPassword": {
+        "NoEcho": "true",
+        "Type": "String",
+        "Description": "Password for the IAM user QueueUser",
+        "MinLength": "1",
+        "MaxLength": "41",
+        "AllowedPattern": "[a-zA-Z0-9]*",
+        "ConstraintDescription": "must contain only alphanumeric characters."
+      }
+    },
+   "Resources": {
+      "PostTimelinessQueue": {
+         "Properties": {
+            "QueueName": "PostTimelinessQueue"
+           },
+         "Type": "AWS::SQS::Queue"
+         }, 
+      "PostTimelinessTopicSubscription": {
+         "Type": "AWS::SNS::Subscription",
+         "Properties": {
+            "Endpoint": {
+               "Fn::GetAtt": [
+                  "PostTimelinessQueue",
+                  "Arn"
+               ]
+            },
+            "Protocol": "sqs",
+            "TopicArn":"arn:aws:sns:us-east-1:851725573367:bereal-clone-1-SNSNewPostTopic-5nUF8RUBGDC1"
+         }
+      },
+      "QueueUser": {
+         "Type": "AWS::IAM::User",
+         "Properties": {
+           "LoginProfile": { "Password": { "Ref": "QueueUserPassword" } }
+         }
+       },
+       "QueueUserKey": {
+         "Type": "AWS::IAM::AccessKey",
+         "Properties": { "UserName": { "Ref": "QueueUser" } }
+       },
+       "RDMessageQueueGroup": {
+         "Type": "AWS::IAM::Group",
+         "Properties": {
+           "Policies": [
+             {
+               "PolicyName": "QueueGroupPolicy",
+               "PolicyDocument": {
+                 "Statement": [
+                   {
+                     "Effect": "Allow",
+                     "Action": ["sqs:DeleteMessage", "sqs:ReceiveMessage"],
+                     "Resource": [
+                       "*"
+                     ]
+                   }
+                 ]
+               }
+             }
+           ]
+         }
+       },
+       "AddUserToQueueGroup": {
+         "Type": "AWS::IAM::UserToGroupAddition",
+         "Properties": {
+           "GroupName": { "Ref": "RDMessageQueueGroup" },
+           "Users": [{ "Ref": "QueueUser" }]
+         }
+       },
+       "QueuePolicy": {
+         "Type": "AWS::SQS::QueuePolicy",
+         "Properties": {
+           "PolicyDocument": {
+             "Statement": [
+               {
+                 "Effect": "Allow",
+                 "Principal": { "Service": "sns.amazonaws.com" },
+                 "Action": ["sqs:SendMessage"],
+                 "Resource": ["*"],
+                 "Condition": {
+                   "ArnEquals": { "aws:SourceArn": "arn:aws:sns:us-east-1:851725573367:bereal-clone-1-SNSNewPostTopic-5nUF8RUBGDC1" }
+                 }
+               }
+             ]
+           },
+           "Queues":  [
+               { "Ref": "PostTimelinessQueue" }
+          ]
+         }
+       }
+   },
+   "Outputs": {
+      "QueueUserInfo": {
+        "Value": {
+          "Fn::Join": [
+            " ",
+            [
+              "ARN:",
+              { "Fn::GetAtt": ["QueueUser", "Arn"] },
+              "Access Key:",
+              { "Ref": "QueueUserKey" },
+              "Secret Key:",
+              { "Fn::GetAtt": ["QueueUserKey", "SecretAccessKey"] }
+            ]
+          ]
+        }
+      },
+      "QueueName": {
+         "Description": "The name of the queue",
+         "Value": {
+            "Fn::GetAtt": [
+               "PostTimelinessQueue",
+               "QueueName"
+            ]
+         }
+      },
+      "QueueURL": {
+         "Description": "The URL of the queue",
+         "Value": {
+            "Ref": "PostTimelinessQueue"
+         }
+      },
+      "QueueARN": {
+         "Description": "The ARN of the queue",
+         "Value": {
+            "Fn::GetAtt": [
+               "PostTimelinessQueue",
+               "Arn"
+            ]
+         },
+         "Export": {
+            "Name": "PostTimelinessQueueARN"
+          }
+      }
+   }
+}

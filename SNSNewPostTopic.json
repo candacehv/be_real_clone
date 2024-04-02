@@ -1,0 +1,15 @@
+{
+  "Resources": {
+    "SNSNewPostTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [
+          {
+            "Endpoint": "https://sqs.us-east-1.amazonaws.com/851725573367/PostTimelinessQueue",
+            "Protocol": "sqs"
+          }
+        ]
+      }
+    }
+  }
+}
