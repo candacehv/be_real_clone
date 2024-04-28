@@ -78,12 +78,26 @@
                     "sqs:ReceiveMessage",
                     "sqs:DeleteMessage",
                     "sqs:GetQueueAttributes",
-                    "sqs:ChangeMessageVisibility",
-                    "dynamodb:*"
+                    "sqs:ChangeMessageVisibility"
                   ],
                   "Resource": [
                     "*"
                   ]
+                }
+              ]
+            }
+          }, 
+          {
+            "PolicyName": "allowDynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:*"
+                  ],
+                  "Resource": "*"
                 }
               ]
             }
@@ -113,8 +127,8 @@
             "AttributeType": "S"
           }, 
           {
-            "AttributeName": "released_timestamp", 
-            "AttributeType": "S"
+            "AttributeName": "released_timestamp_int", 
+            "AttributeType": "N"
           }
         ],
         "KeySchema": [
@@ -123,7 +137,7 @@
             "KeyType": "HASH"
           }, 
           {
-            "AttributeName": "released_timestamp", 
+            "AttributeName": "released_timestamp_int", 
             "KeyType": "RANGE"
           }
         ], 
