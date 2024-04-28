@@ -1,0 +1,26 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+        "timelinessLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Code": { "S3Bucket": "bereal", "S3Key": "timeliness/app.zip" },
+                "Handler": "app.app",
+                "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
+                "Runtime": "python3.11",
+                "Timeout": 60,
+                "MemorySize": 512
+            }
+        },
+       "timelinessLambdaFunctionEventSourceMapping": {
+        "Type": "AWS::Lambda::EventSourceMapping",
+        "Properties": {
+          "BatchSize": 10,
+          "Enabled": true,
+          "EventSourceArn":"arn:aws:sqs:us-east-1:851725573367:PostTimelinessQueue",
+          "FunctionName": { "Fn::GetAtt": ["timelinessLambdaFunction", "Arn"] }
+        }
+      }
+    }
+}
+

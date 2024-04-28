@@ -6,7 +6,7 @@ db = boto3.resource('dynamodb')
 sqs = boto3.resource('sqs', region_name='us-east-1')
 
 
-def app(event, context):
+async def app(event, context):
     # Load timeliness table with current timestamp and user_id.
     # If the upload timestamp is more than 2 minutes later than the released timestamp, then the user is late.
     # The released timestamp is the timestamp when the app prompts the user to upload a picture.

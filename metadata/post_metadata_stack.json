@@ -127,8 +127,8 @@
             "AttributeType": "S"
           }, 
           {
-            "AttributeName": "released_timestamp_int", 
-            "AttributeType": "N"
+            "AttributeName": "released_timestamp", 
+            "AttributeType": "S"
           }
         ],
         "KeySchema": [
@@ -137,7 +137,7 @@
             "KeyType": "HASH"
           }, 
           {
-            "AttributeName": "released_timestamp_int", 
+            "AttributeName": "released_timestamp", 
             "KeyType": "RANGE"
           }
         ], 
