@@ -16,16 +16,7 @@
       "SNSNewPostTopic": {
         "Type": "AWS::SNS::Topic"
       },
-      "PublishUser": {
-        "Type": "AWS::IAM::User",
-        "Properties": {
-          "LoginProfile": { "Password": { "Ref": "PublishUserPassword" } }
-        }
-      },
-      "PublishUserKey": {
-        "Type": "AWS::IAM::AccessKey",
-        "Properties": { "UserName": { "Ref": "PublishUser" } }
-      },
+
       "PublishTopicGroup": {
         "Type": "AWS::IAM::Group",
         "Properties": {
@@ -43,13 +34,6 @@
               }
             }
           ]
-        }
-      },
-      "AddUserToPublishTopicGroup": {
-        "Type": "AWS::IAM::UserToGroupAddition",
-        "Properties": {
-          "GroupName": { "Ref": "PublishTopicGroup" },
-          "Users": [{ "Ref": "PublishUser" }]
         }
       }
     },
